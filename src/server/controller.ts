@@ -16,9 +16,6 @@ export class Controller {
     @Container.inject(Container.Identifiers.DatabaseBlockRepository)
     private readonly blockRepository!: Repositories.BlockRepository;
 
-    @Container.inject(Container.Identifiers.StateStore)
-    private readonly stateStore!: Contracts.State.StateStore;
-
     public async pay(request: Hapi.Request, h: Hapi.ResponseToolkit): Promise<Hapi.ResponseObject> {
         this.logger.info(`Paying out!`);
 
@@ -46,17 +43,13 @@ export class Controller {
 
         const blockchain = this.app.get<Contracts.Blockchain.Blockchain>(Container.Identifiers.BlockchainService);
 
-        this.stateStore.clearWakeUpTimeout();
-        blockchain.dispatch("STOP");
         const queue = blockchain.getQueue();
-        queue.stop();
-        queue.on("drain", async () => {
-            const lastBlock = (await this.blockRepository.findLatest())!.height;
-            await this.blockRepository.deleteTopBlocks(this.app, lastBlock - height);
-            closeSync(openSync(`${process.env.CORE_PATH_TEMP}/force-integrity-check.lock`, "w"));
-            this.logger.info(`Core will now restart`);
-            setImmediate(() => process.exit());
-        });
+        await queue.stop();
+        const lastBlock = (await this.blockRepository.findLatest())!.height;
+        await this.blockRepository.deleteTopBlocks(this.app, lastBlock - height);
+        closeSync(openSync(`${process.env.CORE_PATH_TEMP}/force-integrity-check.lock`, "w"));
+        this.logger.info(`Core will now restart`);
+        setImmediate(() => process.exit());
         return h.response().code(200);
     }
 }
