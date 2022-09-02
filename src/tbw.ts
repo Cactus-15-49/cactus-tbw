@@ -93,7 +93,7 @@ export class TBW {
                     const blockReward =
                         delegate.getPublicKey() === data.generatorPublicKey
                             ? data.reward.minus(
-                                  Object.values(data.devFund! as { [key: string]: Utils.BigNumber }).reduce(
+                                  Object.values(data.donations! as { [key: string]: Utils.BigNumber }).reduce(
                                       (prev, curr) => prev.plus(curr),
                                       Utils.BigNumber.ZERO,
                                   ),
