@@ -68,3 +68,15 @@ export class RollbackRoute extends Route {
         };
     }
 }
+
+export class UnpaidRoute extends Route {
+    public getRoutesConfigByPath(): { [path: string]: RouteConfig } {
+        const controller = this.getController();
+        return {
+            "/unpaid": {
+                id: "unpaid",
+                handler: controller.unpaid,
+            },
+        };
+    }
+}

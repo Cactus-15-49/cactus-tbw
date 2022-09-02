@@ -2,7 +2,7 @@ import { Server as HapiServer } from "@hapi/hapi";
 import { Container, Contracts } from "@solar-network/kernel";
 import { existsSync, unlinkSync } from "fs";
 
-import { PayRoute, RepayRoute, RollbackRoute } from "./routes";
+import { PayRoute, RepayRoute, RollbackRoute, UnpaidRoute } from "./routes";
 
 @Container.injectable()
 export class Server {
@@ -21,6 +21,7 @@ export class Server {
         this.app.resolve(PayRoute).register(this.unixSocket);
         this.app.resolve(RepayRoute).register(this.unixSocket);
         this.app.resolve(RollbackRoute).register(this.unixSocket);
+        this.app.resolve(UnpaidRoute).register(this.unixSocket);
     }
 
     public async boot(): Promise<void> {
