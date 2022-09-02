@@ -5,7 +5,8 @@ To install the tbw just run: `solar plugin:install https://github.com/Cactus-15-
 Once installed, run `solar tbw:enable` to enable TBW and run `solar tbw:configure` to configure the TBW.  
 Once configured, restart core and you should see `Delegates configured for true block weight: [delegate name]`.  
 If you want to set a starting height, you can run `solar tbw:database set_start [height]`. Please bear in mind that this command will temporarily stop core and do a rollback.  
-To run the payout, just use `solar tbw:pay`. The run can be executed automatically by running the command through a cronjob.
+To run the payout, just use `solar tbw:pay`.  
+The payout can be executed automatically by running `. /home/{USER}/.solar/.env && /home/{USER}/solar-core/packages/core/bin/run tbw:pay` through a cronjob.
 ## Modes
 0. **Classic** : Classic mode is the standard mode of TBW. The rewards are based only on the weight of voters at the time of forging.
 1. **Every** : The rewards are calculated considering the weight of the voters on **all** blocks, including the one you are not forging. For this mode, fidelity will not consider the weight on the past blocks but only if the vote was cast or not.
