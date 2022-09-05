@@ -1,5 +1,5 @@
 import { Commands, Container } from "@solar-network/cli";
-import { Networks } from "@solar-network/crypto";
+import { Managers, Networks } from "@solar-network/crypto";
 import Joi from "joi";
 
 import { Database } from "../database";
@@ -25,6 +25,7 @@ export class Command extends Commands.Command {
     }
 
     public async execute(): Promise<void> {
+        Managers.configManager.setFromPreset(this.getFlag("network"));
         const dbPath: string = this.app.getCorePath("data", "tbw");
         const db = new Database(dbPath);
         const settings = db.getSettings();
