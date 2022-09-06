@@ -199,19 +199,23 @@ export class Pay {
             this.logger.debug(`Original: ${JSON.stringify(voters.filter((w) => w.height === block.height))}`);
 
             maxHeight = block.height > maxHeight ? block.height : maxHeight;
-
+            const currentRound = AppUtils.roundCalculator.calculateRound(block.height);
             const wallets = voters
                 .filter((w) => w.height === block.height)
                 .filter((w) => !blacklist.includes(w.address))
                 .filter((w) => whitelist.length === 0 || whitelist.includes(w.address))
                 .map((w) => {
                     if (fidelity) {
-                        const balances = this.db.getAddressBalancesForNPreviousBlocks(
-                            w.address,
-                            block.height,
-                            fidelity,
+                        const startHeight = Math.max(
+                            0,
+                            currentRound.roundHeight - fidelity * currentRound.maxDelegates,
                         );
-                        w.weight = modeClass.handleFidelity(balances, fidelity, w.weight);
+                        const balances = this.db.getAddressBalancesBetweenHeights(
+                            w.address,
+                            startHeight,
+                            block.height - 1,
+                        );
+                        w.weight = modeClass.handleFidelity(balances, block.height - startHeight, w.weight);
                     }
                     if (routes[w.address]) {
                         w.address = routes[w.address];

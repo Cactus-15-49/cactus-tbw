@@ -8,10 +8,10 @@ export abstract class modeHandler {
             height: number;
             weight: Utils.BigNumber;
         }>,
-        fidelity: number,
+        numberOfBlocks: number,
         currentWeight: Utils.BigNumber,
     ): Utils.BigNumber {
-        if (lastNWeights.length < fidelity) {
+        if (lastNWeights.length < numberOfBlocks) {
             return Utils.BigNumber.ZERO;
         }
         const fidelityBalance = lastNWeights.reduce(

@@ -296,16 +296,14 @@ export class Database {
         });
     }
 
-    public getAddressBalancesForNPreviousBlocks(
+    public getAddressBalancesBetweenHeights(
         address: string,
-        currentHeight: number,
-        n: number,
+        startHeight: number,
+        endHeight: number,
     ): Array<{ height: number; weight: Utils.BigNumber }> {
         const weights = this.db
-            .prepare(
-                `SELECT weight, height FROM tbw WHERE address = ? AND height IN (SELECT DISTINCT (height) FROM tbw WHERE height < ? ORDER BY height DESC LIMIT ?)`,
-            )
-            .all(address, currentHeight, n);
+            .prepare(`SELECT weight, height FROM tbw WHERE address = ? AND height >= ? AND height <= ?`)
+            .all(address, startHeight, endHeight);
         return weights.map((w) => {
             return {
                 weight: Utils.BigNumber.make(w.weight),
