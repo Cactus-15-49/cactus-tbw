@@ -123,7 +123,11 @@ const getPaytable = (username: string, dbPath: string): paytableWorkerResult => 
                 paytable[wallet.address] = (paytable[wallet.address] || Utils.BigNumber.ZERO).plus(payout);
                 toPayInThisBlock = toPayInThisBlock.plus(payout);
             }
-            log(`${wallet.address}: ${paytable[wallet.address].toString()} +${payout.toString()}`);
+            log(
+                `${wallet.address}: ${(
+                    paytable[wallet.address] || Utils.BigNumber.ZERO
+                ).toString()} +${payout.toString()}`,
+            );
         }
         log(`total in this block: ${toPayInThisBlock.toString()}`);
         totalToPay = totalToPay.plus(toPayInThisBlock);
