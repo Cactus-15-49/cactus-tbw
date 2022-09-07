@@ -1,4 +1,4 @@
-import { Utils } from "@solar-network/crypto";
+import { Managers, Utils } from "@solar-network/crypto";
 import { Utils as AppUtils } from "@solar-network/kernel";
 import { parentPort, workerData } from "worker_threads";
 
@@ -150,5 +150,5 @@ const log = (message: string) => {
         data: message,
     });
 };
-
+Managers.configManager.setFromPreset(workerData.network);
 parentPort?.postMessage({ type: "result", data: getPaytable(workerData.username, workerData.dbPath) });

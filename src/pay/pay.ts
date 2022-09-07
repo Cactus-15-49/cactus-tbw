@@ -8,6 +8,9 @@ import { paytable, paytableResult, paytableWorkerResult } from "../interfaces";
 
 @Container.injectable()
 export class Pay {
+    @Container.inject(Container.Identifiers.Application)
+    public readonly app!: Contracts.Kernel.Application;
+
     @Container.inject(Container.Identifiers.LogService)
     private readonly logger!: Contracts.Kernel.Logger;
 
@@ -161,6 +164,7 @@ export class Pay {
                 workerData: {
                     username,
                     dbPath: this.configuration.get("dbPath") as string,
+                    network: this.app.network(),
                 },
             });
             worker.on("message", (message: { type: string; data: string | paytableWorkerResult }) => {
