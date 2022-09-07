@@ -46,7 +46,7 @@ export class Command extends Commands.Command {
         const result = await Utils.http.post("/pay", {
             socketPath: this.app.getCorePath("temp", "tbw-pay.sock"),
             rejectOnError: false,
-            timeout: 30000,
+            timeout: 60000,
         });
 
         return result;

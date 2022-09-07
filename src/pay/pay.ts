@@ -1,11 +1,10 @@
 import { Identities, Interfaces, Managers, Transactions, Utils } from "@solar-network/crypto";
-import { Container, Contracts, Providers, Utils as AppUtils } from "@solar-network/kernel";
+import { Container, Contracts, Providers } from "@solar-network/kernel";
 import delay from "delay";
+import { Worker } from "worker_threads";
 
 import { Database } from "../database";
-import { blockRewardType, blockType } from "../interfaces";
-import { modeFactory } from "./modes/factory";
-import { modeHandler } from "./modes/handler";
+import { paytable, paytableResult, paytableWorkerResult } from "../interfaces";
 
 @Container.injectable()
 export class Pay {
@@ -72,7 +71,7 @@ export class Pay {
 
         const username = wallet.getAttribute<string>("delegate.username");
 
-        const { maxHeight, totalToPay, paytable } = this.getPaytable(username);
+        const { maxHeight, totalToPay, paytable } = await this.getPaytableFromWorker(username, true);
         const { reserve, memo, extraFee } = settings;
 
         const transactions: Interfaces.ITransactionData[] = [];
@@ -156,112 +155,34 @@ export class Pay {
         }
     }
 
-    public getPaytable(username: string): {
-        maxHeight: number;
-        totalToPay: Utils.BigNumber;
-        paytable: { [key: string]: Utils.BigNumber };
-    } {
-        const settings = this.db.getSettings();
-        if (!settings) {
-            throw new Error("Settings file not found or invalid");
-        }
-        const { blacklist, mode, routes, whitelist, sharing, max: maxCap, min: minCap, fidelity, payFees } = settings;
-
-        const paytable = {};
-        let maxHeight = 0;
-        let totalToPay = Utils.BigNumber.ZERO;
-
-        const lastHeight = this.db.getLastPayHeight(username);
-        const rawBlocks = this.db.getTbwBlocksFromHeight(lastHeight + 1);
-
-        const modeClass = modeFactory.getMode(mode);
-
-        const voters = this.processRawBlocks(rawBlocks, modeClass, minCap, maxCap);
-
-        const forgedBlocks = Object.values(
-            voters.reduce((state, curr) => {
-                if (!state.some((b) => curr.height === b.height)) {
-                    state.push({
-                        height: curr.height,
-                        rewards: curr.rewards,
-                        fees: curr.fees,
-                    });
-                }
-                return state;
-            }, [] as blockType[]),
-        );
-
-        for (const block of forgedBlocks) {
-            this.logger.debug(`---------------------`);
-            this.logger.debug(`Block: ${block.height}`);
-            this.logger.debug(`Reward: ${block.rewards.toString()}`);
-            this.logger.debug(`Fees: ${block.fees.toString()}`);
-            this.logger.debug(`Original: ${JSON.stringify(voters.filter((w) => w.height === block.height))}`);
-
-            maxHeight = block.height > maxHeight ? block.height : maxHeight;
-            const currentRound = AppUtils.roundCalculator.calculateRound(block.height);
-            const wallets = voters
-                .filter((w) => w.height === block.height)
-                .filter((w) => !blacklist.includes(w.address))
-                .filter((w) => whitelist.length === 0 || whitelist.includes(w.address))
-                .map((w) => {
-                    if (fidelity) {
-                        const startHeight = Math.max(
-                            0,
-                            currentRound.roundHeight - fidelity * currentRound.maxDelegates,
-                        );
-                        const balances = this.db.getAddressBalancesBetweenHeights(
-                            w.address,
-                            startHeight,
-                            block.height - 1,
-                        );
-                        w.weight = modeClass.handleFidelity(balances, block.height - startHeight, w.weight);
+    public getPaytableFromWorker(username: string, printLogs = false): Promise<paytableResult> {
+        return new Promise((resolve, reject) => {
+            const worker = new Worker(`${__dirname}/worker.js`, {
+                workerData: {
+                    username,
+                    dbPath: this.configuration.get("dbPath") as string,
+                },
+            });
+            worker.on("message", (message: { type: string; data: string | paytableWorkerResult }) => {
+                if (message.type === "log" && printLogs) {
+                    this.logger.debug(message.data);
+                    return;
+                } else if (message.type === "result") {
+                    const data = message.data as paytableWorkerResult;
+                    const paytable: paytable = {};
+                    for (const [address, amount] of Object.entries(data.paytable)) {
+                        paytable[address] = Utils.BigNumber.make(amount);
                     }
-                    if (routes[w.address]) {
-                        w.address = routes[w.address];
-                    }
-                    return w;
-                });
-            this.logger.debug(`Wallets: ${JSON.stringify(wallets)}`);
-
-            const totalWeight = wallets.reduce((sum, curr) => sum.plus(curr.weight), Utils.BigNumber.ZERO);
-
-            this.logger.debug(`total weight: ${totalWeight.toString()}`);
-
-            if (totalWeight.isZero()) {
-                this.logger.debug(`Total weight is zero, continuing`);
-                continue;
-            }
-
-            const blockReward = block.rewards;
-            this.logger.debug(`blockReward: ${blockReward.toString()}`);
-            const fees = payFees === "y" ? block.fees : Utils.BigNumber.ZERO;
-            this.logger.debug(`fees: ${fees.toString()}`);
-            const totalReward = blockReward.plus(fees);
-            this.logger.debug(`totalReward: ${totalReward.toString()}`);
-
-            let toPayInThisBlock = Utils.BigNumber.ZERO;
-
-            for (const wallet of wallets) {
-                const payout = totalReward.times(wallet.weight).times(sharing).div(totalWeight).div(100);
-                if (payout.isGreaterThan(0)) {
-                    paytable[wallet.address] = (paytable[wallet.address] || Utils.BigNumber.ZERO).plus(payout);
-                    toPayInThisBlock = toPayInThisBlock.plus(payout);
+                    const result: paytableResult = {
+                        maxHeight: data.maxHeight,
+                        totalToPay: Utils.BigNumber.make(data.totalToPay),
+                        paytable: paytable,
+                    };
+                    resolve(result);
                 }
-                this.logger.debug(`${wallet.address}: ${paytable[wallet.address].toString()} +${payout.toString()}`);
-            }
-            this.logger.debug(`total in this block: ${toPayInThisBlock.toString()}`);
-            totalToPay = totalToPay.plus(toPayInThisBlock);
-
-            this.logger.debug(
-                `Total for ${block.height}: ${toPayInThisBlock.toString()} (${toPayInThisBlock
-                    .times(100)
-                    .div(totalReward)
-                    .toString()}%)`,
-            );
-        }
-
-        return { maxHeight, totalToPay, paytable };
+            });
+            worker.on("error", reject);
+        });
     }
 
     public async replay(id: string): Promise<{ success: boolean; error?: string }> {
@@ -352,26 +273,6 @@ export class Pay {
             }
         }
         return;
-    }
-
-    private processRawBlocks(
-        rawBlocks: blockRewardType[],
-        modeClass: modeHandler,
-        min: number | null,
-        max: number | null,
-    ) {
-        const blocks: blockRewardType[] = [];
-        const rounds: Array<Array<blockRewardType>> = Object.values(
-            rawBlocks.reduce((state, curr) => {
-                const currRound = AppUtils.roundCalculator.calculateRound(curr.height).round;
-                state[currRound] = [...(state[currRound] || []), curr];
-                return state;
-            }, {}),
-        );
-        for (const round of rounds) {
-            blocks.push(...modeClass.handleRoundBlocks(round, min, max));
-        }
-        return blocks;
     }
 
     private convert(paytable: { [key: string]: Utils.BigNumber }) {

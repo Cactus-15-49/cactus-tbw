@@ -58,7 +58,7 @@ export class Controller {
 
         const pay: Pay = this.app.get(Symbol.for("TBW<Pay>"));
         try {
-            const result = await pay.getPaytable(username);
+            const result = await pay.getPaytableFromWorker(username);
             return h.response(result.paytable).code(200);
         } catch {
             return h.response().code(500);

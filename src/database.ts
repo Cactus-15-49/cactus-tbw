@@ -296,18 +296,18 @@ export class Database {
         });
     }
 
-    public getAddressBalancesBetweenHeights(
-        address: string,
+    public getBalancesBetweenHeights(
         startHeight: number,
         endHeight: number,
-    ): Array<{ height: number; weight: Utils.BigNumber }> {
+    ): Array<{ height: number; weight: Utils.BigNumber; address: string }> {
         const weights = this.db
-            .prepare(`SELECT weight, height FROM tbw WHERE address = ? AND height >= ? AND height <= ?`)
-            .all(address, startHeight, endHeight);
+            .prepare(`SELECT weight, height, address FROM tbw WHERE height >= ? AND height <= ?`)
+            .all(startHeight, endHeight);
         return weights.map((w) => {
             return {
                 weight: Utils.BigNumber.make(w.weight),
                 height: w.height,
+                address: w.address,
             };
         });
     }

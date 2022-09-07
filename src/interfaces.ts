@@ -46,6 +46,22 @@ export interface blockType {
     fees: Utils.BigNumber;
 }
 
+export interface paytable {
+    [key: string]: Utils.BigNumber;
+}
+
+export interface paytableWorkerResult {
+    maxHeight: number;
+    totalToPay: string;
+    paytable: { [key: string]: string };
+}
+
+export interface paytableResult {
+    maxHeight: number;
+    totalToPay: Utils.BigNumber;
+    paytable: paytable;
+}
+
 export enum modes {
     classic,
     every,
