@@ -3,7 +3,7 @@ import { Managers, Networks } from "@solar-network/crypto";
 import Joi from "joi";
 
 import { Database } from "../database";
-import { validAddress } from "../utils/validation";
+import { validAddress, validate } from "../utils/validation";
 
 @Container.injectable()
 export class Command extends Commands.Command {
@@ -20,7 +20,7 @@ export class Command extends Commands.Command {
                 "add, remove or disable. Empty to show blacklist.",
                 Joi.string().valid("add", "remove", "disable"),
             )
-            .setArgument("value", "Address to add or remove.", validAddress);
+            .setArgument("value", "Address to add or remove.", Joi.string().min(1));
     }
 
     public async execute(): Promise<void> {
@@ -38,6 +38,13 @@ export class Command extends Commands.Command {
 
         if ((command === "add" || command === "remove") && !value) {
             this.components.warning(`Please specify the address to ${command}.`);
+            return;
+        }
+
+        const isAddressInvalid = validate(validAddress, value);
+
+        if (value && isAddressInvalid) {
+            this.components.warning(isAddressInvalid as unknown as string);
             return;
         }
 

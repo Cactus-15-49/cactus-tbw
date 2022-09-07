@@ -3,7 +3,7 @@ import { Managers, Networks } from "@solar-network/crypto";
 import Joi from "joi";
 
 import { Database } from "../database";
-import { validAddress } from "../utils/validation";
+import { validAddress, validate } from "../utils/validation";
 
 @Container.injectable()
 export class Command extends Commands.Command {
@@ -20,8 +20,8 @@ export class Command extends Commands.Command {
                 "add, remove and disable routes. Empty to show.",
                 Joi.string().valid("add", "remove", "disable"),
             )
-            .setArgument("source", "Source address to add or remove.", validAddress)
-            .setArgument("destination", "Destination address to add.", validAddress);
+            .setArgument("source", "Source address to add or remove.", Joi.string().min(1))
+            .setArgument("destination", "Destination address to add.", Joi.string().min(1));
     }
 
     public async execute(): Promise<void> {
@@ -45,6 +45,19 @@ export class Command extends Commands.Command {
 
         if (command === "add" && (!source || !destination)) {
             this.components.warning(`Please specify the address source and destination.`);
+            return;
+        }
+
+        const isSourceInvalid = validate(validAddress, source);
+        const isDestinationInvalid = validate(validAddress, destination);
+
+        if (source && isSourceInvalid) {
+            this.components.warning(isSourceInvalid as unknown as string);
+            return;
+        }
+
+        if (destination && isDestinationInvalid) {
+            this.components.warning(isDestinationInvalid as unknown as string);
             return;
         }
 
