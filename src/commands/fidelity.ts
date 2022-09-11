@@ -29,6 +29,7 @@ export class Command extends Commands.Command {
         }
 
         const fidelity: number | undefined = this.getArgument("fidelity");
+        const isFirstPayment = db.getLastPayHeight() === 0;
 
         if (fidelity !== undefined) {
             const { confirm } = await this.components.prompt({
@@ -40,11 +41,22 @@ export class Command extends Commands.Command {
             });
 
             if (confirm) {
-                try {
-                    db.updateSettings("fidelity", fidelity || null);
-                } catch {
-                    this.components.warning("Could not save settings. Fidelity unchanged.");
-                    return;
+                const { confirmRestart } =
+                    isFirstPayment && (settings.fidelity || 0) < fidelity
+                        ? await this.components.prompt({
+                              type: "confirm",
+                              name: "confirmRestart",
+                              message: `WARNING: if you change fidelity before the first payout, you'll need to use set_start again in order for the calculation of the first blocks to be accurate. Do you confirm?`,
+                          })
+                        : { confirmRestart: true };
+
+                if (confirmRestart) {
+                    try {
+                        db.updateSettings("fidelity", fidelity || null);
+                    } catch {
+                        this.components.warning("Could not save settings. Fidelity unchanged.");
+                        return;
+                    }
                 }
 
                 this.components.log(`Fidelity set to ${fidelity || "None"}`);

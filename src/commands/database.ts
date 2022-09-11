@@ -83,13 +83,17 @@ export class Command extends Commands.Command {
                 const isCoreRunning = this.processManager.isOnline(`${this.getFlag("token")}-core`);
                 const isRelayRunning = this.processManager.isOnline(`${this.getFlag("token")}-relay`);
 
+                const fidelity = db.getSettings()?.fidelity;
+                const currentRound = AppUtils.roundCalculator.calculateRound(value as number);
+                const startHeight = Math.max(0, currentRound.roundHeight - (fidelity || 0) * currentRound.maxDelegates);
+
                 if (!isCoreRunning && !isRelayRunning) {
                     this.components.warning("Core is not running. Cannot rollback.");
                     return;
                 }
 
                 db.deleteVotesAfterHeight(0);
-                await this.sendRollbackSignal(value as number);
+                await this.sendRollbackSignal(startHeight);
                 db.saveAndDeleteHistory();
 
                 this.components.log(`Start value set correctly to ${value}.`);
