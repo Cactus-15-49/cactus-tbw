@@ -54,11 +54,9 @@ export class Controller {
     }
 
     public async unpaid(request: Hapi.Request, h: Hapi.ResponseToolkit): Promise<Hapi.ResponseObject> {
-        const username = (request as any).payload.username;
-
         const pay: Pay = this.app.get(Symbol.for("TBW<Pay>"));
         try {
-            const result = await pay.getPaytableFromWorker(username);
+            const result = await pay.getPaytableFromWorker();
             return h.response(result.paytable).code(200);
         } catch {
             return h.response().code(500);

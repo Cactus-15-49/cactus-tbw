@@ -72,9 +72,7 @@ export class Pay {
             }
         }
 
-        const username = wallet.getAttribute<string>("delegate.username");
-
-        const { maxHeight, totalToPay, paytable } = await this.getPaytableFromWorker(username, true);
+        const { maxHeight, totalToPay, paytable } = await this.getPaytableFromWorker(true);
         const { reserve, memo, extraFee } = settings;
 
         const transactions: Interfaces.ITransactionData[] = [];
@@ -145,7 +143,7 @@ export class Pay {
             }
             const transaction = tx.getStruct();
             transactions.push(transaction);
-            this.db.addHistory(maxHeight, transaction, username);
+            this.db.addHistory(maxHeight, transaction);
         }
 
         const chunks = this.chunk(
@@ -158,11 +156,10 @@ export class Pay {
         }
     }
 
-    public getPaytableFromWorker(username: string, printLogs = false): Promise<paytableResult> {
+    public getPaytableFromWorker(printLogs = false): Promise<paytableResult> {
         return new Promise((resolve, reject) => {
             const worker = new Worker(`${__dirname}/worker.js`, {
                 workerData: {
-                    username,
                     dbPath: this.configuration.get("dbPath") as string,
                     network: this.app.network(),
                 },
@@ -244,7 +241,7 @@ export class Pay {
             newTx.secondSign(pp[1]!);
         }
         const transaction = newTx.getStruct();
-        this.db.addHistory(databaseTx.height, transaction, wallet.getAttribute<string>("delegate.username"));
+        this.db.addHistory(databaseTx.height, transaction);
         this.db.setTransactionToRepaid(id);
         await this.sendTransaction([transaction]);
         return { success: true };

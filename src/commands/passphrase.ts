@@ -73,6 +73,7 @@ export class Command extends Commands.Command {
             try {
                 if (pp1 !== undefined) {
                     db.deleteVotesAfterHeight(0);
+                    db.saveAndDeleteHistory();
                     db.updateSettings("pp1", pp1 === "" ? null : pp1);
                 }
                 if (pp2 !== undefined) {

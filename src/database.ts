@@ -8,12 +8,14 @@ import { validateSettings } from "./utils/validation";
 export class Database {
     private db;
     private configFile: string;
+    private path: string;
     public constructor(path: string) {
         if (!existsSync(path) || !lstatSync(path).isDirectory()) {
             mkdirSync(path, { recursive: true });
         }
-        this.db = new Sqlite(`${path}${path.endsWith("/") ? "" : "/"}tbw.db`);
-        this.configFile = `${path}${path.endsWith("/") ? "" : "/"}config.json`;
+        this.path = `${path}${path.endsWith("/") ? "" : "/"}`;
+        this.db = new Sqlite(`${this.path}tbw.db`);
+        this.configFile = `${this.path}config.json`;
     }
 
     public setup() {
@@ -23,7 +25,6 @@ export class Database {
             CREATE TABLE IF NOT EXISTS history (
                 num INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 height INTEGER NOT NULL,
-                delegate TEXT NOT NULL,
                 confirmHeight INTEGER DEFAULT NULL,
                 id TEXT NOT NULL UNIQUE,
                 addresses TEXT NOT NULL,
@@ -104,14 +105,14 @@ export class Database {
 
     // History
 
-    public addHistory(height: number, tx: Interfaces.ITransactionData, delegate: string) {
+    public addHistory(height: number, tx: Interfaces.ITransactionData) {
         if (tx.typeGroup !== 1 || tx.type !== 6) {
             throw new Error("Trying to save in history a transaction that is not transfer");
         }
 
         this.db
             .prepare(
-                "INSERT INTO history (height, id, addresses, totalAmount, timestamp, tx, delegate) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO history (height, id, addresses, totalAmount, timestamp, tx) VALUES (?, ?, ?, ?, ?, ?)",
             )
             .run(
                 height,
@@ -123,7 +124,6 @@ export class Database {
                     .toString(),
                 Math.round(Date.now() / 1000),
                 JSON.stringify(tx),
-                delegate,
             );
     }
 
@@ -173,10 +173,8 @@ export class Database {
         return true;
     }
 
-    public getLastPayHeight(delegate: string): number {
-        return (
-            this.db.prepare("SELECT MAX(height) AS height FROM history WHERE delegate = ?").get(delegate).height || 0
-        );
+    public getLastPayHeight(): number {
+        return this.db.prepare("SELECT MAX(height) AS height FROM history").get().height || 0;
     }
 
     public getNotConfirmedTransactions(): history[] {
@@ -187,7 +185,11 @@ export class Database {
         return this.db.prepare("SELECT * FROM history").all();
     }
 
-    public deleteHistory(): boolean {
+    public saveAndDeleteHistory(): boolean {
+        const history = this.getAllHistory();
+        if (history) {
+            writeFileSync(`${this.path}history-${Date.now() / 1000}`, JSON.stringify(history, null, 4));
+        }
         const info = this.db.prepare("DELETE FROM history").run();
         if (info.changes < 1) {
             return false;

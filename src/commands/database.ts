@@ -2,7 +2,6 @@ import { Commands, Container } from "@solar-network/cli";
 import { ProcessManager } from "@solar-network/cli/dist/services";
 import { Networks } from "@solar-network/crypto";
 import { Utils as AppUtils } from "@solar-network/kernel";
-import { writeFileSync } from "fs";
 import Joi from "joi";
 
 import { Database } from "../database";
@@ -64,7 +63,7 @@ export class Command extends Commands.Command {
                         db.deleteVotesAfterHeight(0);
                     }
                     if (deleteHistory) {
-                        db.deleteHistory();
+                        db.saveAndDeleteHistory();
                     }
                 } catch {
                     this.components.warning("Could not delete.");
@@ -91,14 +90,7 @@ export class Command extends Commands.Command {
 
                 db.deleteVotesAfterHeight(0);
                 await this.sendRollbackSignal(value as number);
-                const history = db.getAllHistory();
-                if (history) {
-                    writeFileSync(
-                        `${dbPath}${dbPath.endsWith("/") ? "" : "/"}history-${Date.now() / 1000}`,
-                        JSON.stringify(history, null, 4),
-                    );
-                }
-                db.deleteHistory();
+                db.saveAndDeleteHistory();
 
                 this.components.log(`Start value set correctly to ${value}.`);
             }

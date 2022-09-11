@@ -29,7 +29,6 @@ export interface history {
     timestamp: number;
     tx: string;
     status: string;
-    delegate: string;
 }
 
 export interface blockRewardType {

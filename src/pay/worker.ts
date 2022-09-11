@@ -27,7 +27,7 @@ const processRawBlocks = (
     return blocks;
 };
 
-const getPaytable = (username: string, dbPath: string): paytableWorkerResult => {
+const getPaytable = (dbPath: string): paytableWorkerResult => {
     const db = new Database(dbPath);
     const settings = db.getSettings();
     if (!settings) {
@@ -39,7 +39,7 @@ const getPaytable = (username: string, dbPath: string): paytableWorkerResult => 
     let maxHeight = 0;
     let totalToPay = Utils.BigNumber.ZERO;
 
-    const lastHeight = db.getLastPayHeight(username);
+    const lastHeight = db.getLastPayHeight();
     const rawBlocks = db.getTbwBlocksFromHeight(lastHeight + 1);
 
     const modeClass = modeFactory.getMode(mode);
@@ -155,4 +155,4 @@ const log = (message: string) => {
     });
 };
 Managers.configManager.setFromPreset(workerData.network);
-parentPort?.postMessage({ type: "result", data: getPaytable(workerData.username, workerData.dbPath) });
+parentPort?.postMessage({ type: "result", data: getPaytable(workerData.dbPath) });

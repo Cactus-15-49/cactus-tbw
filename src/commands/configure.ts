@@ -218,6 +218,7 @@ export class Command extends Commands.Command {
                 db.updateSettings("pp2", pp2 === "" ? null : (pp2 as string));
                 db.setup();
                 db.deleteVotesAfterHeight(0);
+                db.saveAndDeleteHistory();
             } catch (err) {
                 this.components.warning("Could not save settings.");
                 this.components.warning(err);
