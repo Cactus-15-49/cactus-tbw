@@ -19,9 +19,11 @@ export class Controller {
     public async pay(request: Hapi.Request, h: Hapi.ResponseToolkit): Promise<Hapi.ResponseObject> {
         this.logger.info(`Paying out!`);
 
+        const logs = (request as any).payload.logs;
+
         const pay: Pay = this.app.get(Symbol.for("TBW<Pay>"));
         try {
-            await pay.pay();
+            await pay.pay(!!logs);
             return h.response({ success: true }).code(200);
         } catch (err) {
             return h.response({ success: false, error: err.message }).code(500);
@@ -54,9 +56,11 @@ export class Controller {
     }
 
     public async unpaid(request: Hapi.Request, h: Hapi.ResponseToolkit): Promise<Hapi.ResponseObject> {
+        const logs = (request as any).payload.logs;
+
         const pay: Pay = this.app.get(Symbol.for("TBW<Pay>"));
         try {
-            const result = await pay.getPaytableFromWorker();
+            const result = await pay.getPaytableFromWorker(!!logs);
             return h.response(result.paytable).code(200);
         } catch {
             return h.response().code(500);

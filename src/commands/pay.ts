@@ -16,7 +16,8 @@ export class Command extends Commands.Command {
     public configure(): void {
         this.definition
             .setFlag("token", "The name of the token", Joi.string().default("solar"))
-            .setFlag("network", "The name of the network", Joi.string().valid(...Object.keys(Networks)));
+            .setFlag("network", "The name of the network", Joi.string().valid(...Object.keys(Networks)))
+            .setFlag("v", "Print the payout logs", Joi.boolean().default(false));
     }
 
     public async execute(): Promise<void> {
@@ -30,7 +31,7 @@ export class Command extends Commands.Command {
         }
 
         try {
-            const result = await this.sendPaySignal();
+            const result = await this.sendPaySignal(!!this.getFlag("v"));
             if (result.statusCode === 200 && result.data.success) {
                 this.components.log(`Done.`);
             } else {
@@ -42,11 +43,12 @@ export class Command extends Commands.Command {
         }
     }
 
-    private async sendPaySignal(): Promise<Utils.HttpResponse> {
+    private async sendPaySignal(logs: boolean): Promise<Utils.HttpResponse> {
         const result = await Utils.http.post("/pay", {
             socketPath: this.app.getCorePath("temp", "tbw-pay.sock"),
             rejectOnError: false,
             timeout: 60000,
+            body: { logs },
         });
 
         return result;

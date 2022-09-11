@@ -38,7 +38,7 @@ export class Pay {
         this.db = new Database(this.configuration.get("dbPath") as string);
     }
 
-    public async pay(): Promise<void> {
+    public async pay(printLogs = false): Promise<void> {
         const settings = this.db.getSettings();
         if (!settings) {
             throw new Error("Settings file not found or invalid");
@@ -72,7 +72,7 @@ export class Pay {
             }
         }
 
-        const { maxHeight, totalToPay, paytable } = await this.getPaytableFromWorker(true);
+        const { maxHeight, totalToPay, paytable } = await this.getPaytableFromWorker(printLogs);
         const { reserve, memo, extraFee } = settings;
 
         const transactions: Interfaces.ITransactionData[] = [];
