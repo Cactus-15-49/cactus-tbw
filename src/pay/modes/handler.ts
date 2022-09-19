@@ -1,6 +1,6 @@
 import { Utils } from "@solar-network/crypto";
 
-import { blockRewardType } from "../../interfaces";
+import { blocksStructType } from "../../interfaces";
 
 export abstract class modeHandler {
     public handleFidelity(
@@ -24,27 +24,22 @@ export abstract class modeHandler {
         return currentWeight;
     }
 
-    protected calculateTotalRoundRewards(roundBlocks: blockRewardType[]): [Utils.BigNumber, Utils.BigNumber] {
-        return roundBlocks
-            .filter(
-                (value, index, self) =>
-                    value.rewards.isGreaterThan(0) && self.findIndex((b) => b.height === value.height) === index,
-            )
-            .reduce(
-                (state, curr) => {
-                    return [state[0].plus(curr.rewards), state[1].plus(curr.fees)];
-                },
-                [Utils.BigNumber.ZERO, Utils.BigNumber.ZERO],
-            );
+    protected calculateTotalRoundRewards(roundBlocks: blocksStructType[]): [Utils.BigNumber, Utils.BigNumber] {
+        return roundBlocks.reduce(
+            (state, curr) => {
+                return [state[0].plus(curr.rewards), state[1].plus(curr.fees)];
+            },
+            [Utils.BigNumber.ZERO, Utils.BigNumber.ZERO],
+        );
     }
 
-    protected getBiggerHeight(blocks: blockRewardType[]) {
+    protected getBiggerHeight(blocks: blocksStructType[]) {
         return blocks.reduce((max, curr) => (curr.height > max ? curr.height : max), 0);
     }
 
     public abstract handleRoundBlocks(
-        roundBlocks: blockRewardType[],
+        roundBlocks: blocksStructType[],
         min: number | null,
         max: number | null,
-    ): blockRewardType[];
+    ): blocksStructType[];
 }

@@ -2,7 +2,7 @@ import { Identities, Interfaces, Utils } from "@solar-network/crypto";
 import Sqlite from "better-sqlite3";
 import { existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 
-import { history, modes, settingsType } from "./interfaces";
+import { balancesType, blockType, history, modes, settingsType } from "./interfaces";
 import { validateSettings } from "./utils/validation";
 
 export class Database {
@@ -39,14 +39,23 @@ export class Database {
         this.db
             .prepare(
                 `
-            CREATE TABLE IF NOT EXISTS tbw (
+            CREATE TABLE IF NOT EXISTS balances (
                 height INTEGER NOT NULL,
-                timestamp INTEGER NOT NULL,
-                reward TEXT NOT NULL,
-                fees TEXT NOT NULL,
                 address TEXT NOT NULL,
                 weight TEXT NOT NULL,
                 PRIMARY KEY (height, address)
+            );
+        `,
+            )
+            .run();
+        this.db
+            .prepare(
+                `
+            CREATE TABLE IF NOT EXISTS blocks (
+                height INTEGER NOT NULL,
+                reward TEXT NOT NULL,
+                fees TEXT NOT NULL,
+                PRIMARY KEY (height)
             );
         `,
             )
@@ -277,33 +286,22 @@ export class Database {
 
     // Tbw
 
-    public getTbwBlocksFromHeight(height: number): Array<{
-        height: number;
-        weight: Utils.BigNumber;
-        address: string;
-        rewards: Utils.BigNumber;
-        fees: Utils.BigNumber;
-    }> {
+    public getTbwBlocksBetweenHeights(startHeight: number, endHeight: number): blockType[] {
         const voters = this.db
-            .prepare(`SELECT address, weight, height, reward, fees FROM tbw WHERE height >= ?`)
-            .all(height);
+            .prepare(`SELECT height, reward, fees FROM blocks WHERE height >= ? AND height <= ?`)
+            .all(startHeight, endHeight);
         return voters.map((v) => {
             return {
                 height: v.height,
-                weight: Utils.BigNumber.make(v.weight),
-                address: v.address,
                 rewards: Utils.BigNumber.make(v.reward),
                 fees: Utils.BigNumber.make(v.fees),
             };
         });
     }
 
-    public getBalancesBetweenHeights(
-        startHeight: number,
-        endHeight: number,
-    ): Array<{ height: number; weight: Utils.BigNumber; address: string }> {
+    public getBalancesBetweenHeights(startHeight: number, endHeight: number): balancesType[] {
         const weights = this.db
-            .prepare(`SELECT weight, height, address FROM tbw WHERE height >= ? AND height <= ?`)
+            .prepare(`SELECT weight, height, address FROM balances WHERE height >= ? AND height <= ?`)
             .all(startHeight, endHeight);
         return weights.map((w) => {
             return {
@@ -314,25 +312,47 @@ export class Database {
         });
     }
 
-    public insertVote(
-        height: number,
-        timestamp: number,
-        reward: Utils.BigNumber,
-        fees: Utils.BigNumber,
-        address: string,
-        weight: Utils.BigNumber,
-    ) {
-        this.db
-            .prepare(`INSERT INTO tbw (height, timestamp, reward, fees, address, weight) VALUES (?, ?, ?, ?, ?, ?)`)
-            .run(height, timestamp, reward.toString(), fees.toString(), address, weight.toString());
+    public getLastBlock(): number {
+        return this.db.prepare("SELECT MAX(height) AS height FROM blocks").get().height || 0;
     }
 
-    public deleteVotesAfterHeight(height: number): boolean {
-        const info = this.db.prepare("DELETE FROM tbw WHERE height >= ?").run(height);
-        if (info.changes < 1) {
-            return false;
-        }
-        return true;
+    public insertVote(
+        isGenerator: boolean,
+        height: number,
+        reward: Utils.BigNumber,
+        fees: Utils.BigNumber,
+        balances: Array<{ address: string; weight: Utils.BigNumber }>,
+    ) {
+        const insertBlock = this.db.prepare(`INSERT INTO blocks (height, reward, fees) VALUES (?, ?, ?)`);
+        const insertBalance = this.db.prepare(`INSERT INTO balances (height, address, weight) VALUES (?, ?, ?)`);
+        const transaction = this.db.transaction(
+            (
+                isGenerator: boolean,
+                height: number,
+                reward: Utils.BigNumber,
+                fees: Utils.BigNumber,
+                balances: Array<{ address: string; weight: Utils.BigNumber }>,
+            ) => {
+                this.deleteVotesAfterHeight(height);
+                if (isGenerator) {
+                    insertBlock.run(height, reward.toString(), fees.toString());
+                }
+                for (const balance of balances) {
+                    insertBalance.run(height, balance.address, balance.weight.toString());
+                }
+            },
+        );
+        transaction(isGenerator, height, reward, fees, balances);
+    }
+
+    public deleteVotesAfterHeight(height: number) {
+        const deleteBlocks = this.db.prepare("DELETE FROM blocks WHERE height >= ?");
+        const deleteBalances = this.db.prepare("DELETE FROM balances WHERE height >= ?");
+        const transaction = this.db.transaction((height: number) => {
+            deleteBalances.run(height);
+            deleteBlocks.run(height);
+        });
+        transaction(height);
     }
 
     private writeFile(settings: settingsType) {

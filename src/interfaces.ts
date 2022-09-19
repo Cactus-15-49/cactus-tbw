@@ -31,18 +31,27 @@ export interface history {
     status: string;
 }
 
-export interface blockRewardType {
+export interface balancesType {
     height: number;
     weight: Utils.BigNumber;
     address: string;
-    rewards: Utils.BigNumber;
-    fees: Utils.BigNumber;
 }
 
 export interface blockType {
     height: number;
     rewards: Utils.BigNumber;
     fees: Utils.BigNumber;
+}
+
+export interface blocksStructType {
+    height: number;
+    round: number;
+    rewards: Utils.BigNumber;
+    fees: Utils.BigNumber;
+    balances: Array<{
+        address: string;
+        weight: Utils.BigNumber;
+    }>;
 }
 
 export interface paytable {

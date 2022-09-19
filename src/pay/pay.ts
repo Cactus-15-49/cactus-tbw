@@ -106,8 +106,8 @@ export class Pay {
 
         let remainingSurplus = surplus;
 
-        for (const adminAddress of Object.keys(reserve).slice(1)) {
-            const payout = surplus.times(reserve[adminAddress]).div(100);
+        for (const [adminAddress, percentage] of Object.entries(reserve).slice(1)) {
+            const payout = surplus.times(percentage).div(100);
             if (payout.isGreaterThan(0)) {
                 paytable[adminAddress] = (paytable[adminAddress] || Utils.BigNumber.ZERO).plus(payout);
                 remainingSurplus = remainingSurplus.minus(payout);
@@ -299,28 +299,12 @@ export class Pay {
         hasSecondSignature: boolean,
         extraFee: number,
     ): Utils.BigNumber {
-        const constants = { ...Managers.configManager.getMilestone(this.blockchain.getLastHeight()) };
-
-        let dynamicFees = this.transactionPoolConfiguration.getRequired<{
-            enabled?: boolean;
-            minFee?: number;
-        }>("dynamicFees");
-
-        if (constants.dynamicFees && constants.dynamicFees.enabled) {
-            dynamicFees = {
-                ...constants.dynamicFees,
-                minFeeBroadcast: constants.dynamicFees.minFee,
-                minFeePool: constants.dynamicFees.minFee,
-            };
-            delete dynamicFees.minFee;
-        }
-
-        const addonBytes = (dynamicFees as any).addonBytes.transfer;
-
+        const fees = { ...Managers.configManager.getMilestone(this.blockchain.getLastHeight()).dynamicFees };
+        const addonBytes = fees.addonBytes.transfer;
         const memoLength = Buffer.from(memo, "utf8").length;
 
         const size = 59 + 64 + (hasSecondSignature ? 64 : 0) + memoLength + 2 + 29 * paymentsInTransaction;
-        const fee = Utils.BigNumber.make((addonBytes + Math.round(size / 2)) * (dynamicFees as any).minFeePool);
+        const fee = Utils.BigNumber.make((addonBytes + Math.round(size / 2)) * fees.minFee);
         return fee.plus(fee.times(extraFee).div(100));
     }
 }

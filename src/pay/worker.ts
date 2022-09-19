@@ -3,26 +3,41 @@ import { Utils as AppUtils } from "@solar-network/kernel";
 import { parentPort, workerData } from "worker_threads";
 
 import { Database } from "../database";
-import { blockRewardType, blockType, paytable, paytableWorkerResult } from "../interfaces";
+import { balancesType, blocksStructType, blockType, paytable, paytableWorkerResult } from "../interfaces";
 import { modeFactory } from "./modes/factory";
 import { modeHandler } from "./modes/handler";
 
 const processRawBlocks = (
-    rawBlocks: blockRewardType[],
+    rawBlocks: blockType[],
+    rawBalances: balancesType[],
+    startRound: number,
+    endRound: number,
     modeClass: modeHandler,
     min: number | null,
     max: number | null,
 ) => {
-    const blocks: blockRewardType[] = [];
-    const rounds: Array<Array<blockRewardType>> = Object.values(
-        rawBlocks.reduce((state, curr) => {
-            const currRound = AppUtils.roundCalculator.calculateRound(curr.height).round;
-            state[currRound] = [...(state[currRound] || []), curr];
-            return state;
-        }, {}),
-    );
-    for (const round of rounds) {
-        blocks.push(...modeClass.handleRoundBlocks(round, min, max));
+    const blocks: blocksStructType[] = [];
+    const rawBlocksStruct = rawBlocks.map((block) => {
+        return {
+            height: block.height,
+            round: AppUtils.roundCalculator.calculateRound(block.height).round,
+            fees: block.fees,
+            rewards: block.rewards,
+            balances: rawBalances
+                .filter((b) => b.height === block.height)
+                .map((b) => {
+                    return {
+                        weight: b.weight,
+                        address: b.address,
+                    };
+                }),
+        };
+    });
+
+    for (let round = startRound; round <= endRound; round++) {
+        const roundBlocks = rawBlocksStruct.filter((b) => b.round === round);
+
+        blocks.push(...modeClass.handleRoundBlocks(roundBlocks, min, max));
     }
     return blocks;
 };
@@ -39,32 +54,34 @@ const getPaytable = (dbPath: string): paytableWorkerResult => {
     let maxHeight = 0;
     let totalToPay = Utils.BigNumber.ZERO;
 
-    const lastHeight = db.getLastPayHeight();
-    const rawBlocks = db.getTbwBlocksFromHeight(lastHeight + 1);
+    const lastPayHeight = db.getLastPayHeight();
+    const lastPayoutRound = AppUtils.roundCalculator.calculateRound(lastPayHeight).round;
+
+    const lastBlockHeight = db.getLastBlock();
+    const currentRound = AppUtils.roundCalculator.calculateRound(lastBlockHeight);
+    const endPreviousRoundHeight = currentRound.roundHeight - 1;
+
+    const rawBlocks = db.getTbwBlocksBetweenHeights(lastPayHeight + 1, endPreviousRoundHeight);
+    const rawBalances = db.getBalancesBetweenHeights(lastPayHeight + 1, endPreviousRoundHeight);
 
     const modeClass = modeFactory.getMode(mode);
 
-    const voters = processRawBlocks(rawBlocks, modeClass, minCap, maxCap);
-
-    const forgedBlocks = Object.values(
-        voters.reduce((state, curr) => {
-            if (!state.some((b) => curr.height === b.height)) {
-                state.push({
-                    height: curr.height,
-                    rewards: curr.rewards,
-                    fees: curr.fees,
-                });
-            }
-            return state;
-        }, [] as blockType[]),
+    const blocks = processRawBlocks(
+        rawBlocks,
+        rawBalances,
+        lastPayoutRound + 1,
+        currentRound.round - 1,
+        modeClass,
+        minCap,
+        maxCap,
     );
 
-    for (const block of forgedBlocks) {
+    for (const block of blocks) {
         log(`---------------------`);
         log(`Block: ${block.height}`);
         log(`Reward: ${block.rewards.toString()}`);
         log(`Fees: ${block.fees.toString()}`);
-        log(`Original: ${JSON.stringify(voters.filter((w) => w.height === block.height))}`);
+        log(`Original: ${JSON.stringify(block.balances)}`);
 
         maxHeight = block.height > maxHeight ? block.height : maxHeight;
 
@@ -83,8 +100,7 @@ const getPaytable = (dbPath: string): paytableWorkerResult => {
                 block.height - 1,
             );
         }
-        const wallets = voters
-            .filter((w) => w.height === block.height)
+        const wallets = block.balances
             .filter((w) => !blacklist.includes(w.address))
             .filter((w) => whitelist.length === 0 || whitelist.includes(w.address))
             .map((w) => {

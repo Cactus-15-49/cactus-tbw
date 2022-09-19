@@ -27,9 +27,6 @@ export class TBW {
     @Container.inject(Container.Identifiers.DatabaseTransactionRepository)
     private readonly transactionRepository!: Repositories.TransactionRepository;
 
-    @Container.inject(Container.Identifiers.BlockHistoryService)
-    private readonly blockHistoryService!: Contracts.Shared.BlockHistoryService;
-
     @Container.inject(Container.Identifiers.TransactionHistoryService)
     private readonly transactionHistoryService!: Contracts.Shared.TransactionHistoryService;
 
@@ -66,13 +63,7 @@ export class TBW {
                         if (!transaction) {
                             continue;
                         }
-                        const blockData = await this.blockHistoryService.findOneByCriteria({
-                            id: transaction.blockId!,
-                        });
-                        if (!blockData) {
-                            continue;
-                        }
-                        this.db.setTransactionToConfimed(id, blockData.height);
+                        this.db.setTransactionToConfimed(id, transaction.blockHeight!);
                     }
                 }
 
@@ -86,34 +77,27 @@ export class TBW {
                 }
 
                 const username = delegate.getAttribute("delegate.username");
-                const walletsArray = this.walletRepository
-                    .allByAddress()
-                    .filter((wallet) => wallet.getVoteBalance(username)?.isGreaterThan(0));
-                if (walletsArray.length) {
-                    const blockReward =
-                        delegate.getPublicKey() === data.generatorPublicKey
-                            ? data.reward.minus(
-                                  Object.values(data.donations! as { [key: string]: Utils.BigNumber }).reduce(
-                                      (prev, curr) => prev.plus(curr),
-                                      Utils.BigNumber.ZERO,
-                                  ),
-                              )
-                            : Utils.BigNumber.ZERO;
-                    const fees =
-                        delegate.getPublicKey() === data.generatorPublicKey
-                            ? data.totalFee.minus(data.burnedFee || 0)
-                            : Utils.BigNumber.ZERO;
-                    this.db.deleteVotesAfterHeight(data.height);
-                    for (const wallet of walletsArray) {
-                        this.db.insertVote(
-                            data.height,
-                            data.timestamp,
-                            blockReward,
-                            fees,
-                            wallet.getAddress(),
-                            wallet.getVoteBalance(username),
-                        );
-                    }
+                const voters = this.walletRepository
+                    .allByPublicKey()
+                    .filter((wallet) => !wallet.getVoteBalance(username).isZero());
+                if (voters.length) {
+                    const blockReward = data.reward.minus(
+                        Object.values(data.donations! as { [key: string]: Utils.BigNumber }).reduce(
+                            (prev, curr) => prev.plus(curr),
+                            Utils.BigNumber.ZERO,
+                        ),
+                    );
+                    const fees = data.totalFee.minus(data.burnedFee || 0);
+
+                    this.db.insertVote(
+                        delegate.getPublicKey() === data.generatorPublicKey,
+                        data.height,
+                        blockReward,
+                        fees,
+                        voters.map((w) => {
+                            return { address: w.getAddress(), weight: w.getVoteBalance(username) };
+                        }),
+                    );
 
                     if (delegate.getPublicKey() === data.generatorPublicKey) {
                         this.logger.info(
