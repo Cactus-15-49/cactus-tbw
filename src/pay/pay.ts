@@ -1,5 +1,5 @@
 import { Identities, Interfaces, Managers, Transactions, Utils } from "@solar-network/crypto";
-import { Container, Contracts, Providers } from "@solar-network/kernel";
+import { Container, Contracts, Providers, Utils as AppUtils } from "@solar-network/kernel";
 import delay from "delay";
 import { Worker } from "worker_threads";
 
@@ -154,6 +154,8 @@ export class Pay {
             await this.sendTransaction(chunk);
             await delay(1000);
         }
+
+        this.purgeOldBlocks();
     }
 
     public getPaytableFromWorker(printLogs = false): Promise<paytableResult> {
@@ -306,5 +308,34 @@ export class Pay {
         const size = 59 + 64 + (hasSecondSignature ? 64 : 0) + memoLength + 2 + 29 * paymentsInTransaction;
         const fee = Utils.BigNumber.make((addonBytes + Math.round(size / 2)) * fees.minFee);
         return fee.plus(fee.times(extraFee).div(100));
+    }
+
+    private purgeOldBlocks(numberOfPayments = 10) {
+        const payouts = this.db.getLastNPayHeights(numberOfPayments);
+        if (payouts.length < numberOfPayments) return;
+
+        const maxDiff = payouts
+            .map((height, index, self) => (self[index - 1] || height) - height)
+            .reduce((max, curr) => (curr > max ? curr : max), 0);
+        if (maxDiff > 0) {
+            const fidelity = this.db.getSettings()?.fidelity || 0;
+            const currentHeight = payouts[0];
+            const currentRound = AppUtils.roundCalculator.calculateRound(currentHeight);
+
+            const fidelityStartHeight = Math.max(
+                0,
+                currentRound.roundHeight - fidelity * currentRound.maxDelegates * numberOfPayments,
+            );
+            const nPaymentsStartHeight = currentHeight - maxDiff * numberOfPayments;
+
+            const height = fidelityStartHeight > nPaymentsStartHeight ? nPaymentsStartHeight : fidelityStartHeight;
+
+            this.db.deleteVotesBeforeHeight(height);
+            this.logger.info(
+                `Purged blocks older than height ${height} from TBW database. (${
+                    currentHeight - height
+                } blocks from now)`,
+            );
+        }
     }
 }

@@ -182,12 +182,17 @@ export class Database {
         return true;
     }
 
+    public getNotConfirmedTransactions(): history[] {
+        return this.db.prepare("SELECT * FROM history WHERE status <> 'CONFIRMED' AND status <> 'REPAID'").all();
+    }
+
     public getLastPayHeight(): number {
         return this.db.prepare("SELECT MAX(height) AS height FROM history").get().height || 0;
     }
 
-    public getNotConfirmedTransactions(): history[] {
-        return this.db.prepare("SELECT * FROM history WHERE status <> 'CONFIRMED' AND status <> 'REPAID'").all();
+    public getLastNPayHeights(n: number): number[] {
+        const heights = this.db.prepare("SELECT DISTINCT height from history ORDER BY height DESC LIMIT ?").all(n);
+        return heights.map((h) => h.height);
     }
 
     public getAllHistory() {
@@ -348,6 +353,16 @@ export class Database {
     public deleteVotesAfterHeight(height: number) {
         const deleteBlocks = this.db.prepare("DELETE FROM blocks WHERE height >= ?");
         const deleteBalances = this.db.prepare("DELETE FROM balances WHERE height >= ?");
+        const transaction = this.db.transaction((height: number) => {
+            deleteBalances.run(height);
+            deleteBlocks.run(height);
+        });
+        transaction(height);
+    }
+
+    public deleteVotesBeforeHeight(height: number) {
+        const deleteBlocks = this.db.prepare("DELETE FROM blocks WHERE height <= ?");
+        const deleteBalances = this.db.prepare("DELETE FROM balances WHERE height <= ?");
         const transaction = this.db.transaction((height: number) => {
             deleteBalances.run(height);
             deleteBlocks.run(height);
