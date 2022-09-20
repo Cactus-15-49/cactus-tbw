@@ -24,7 +24,7 @@ export class ServiceProvider extends Providers.ServiceProvider {
     }
 
     public async boot(): Promise<void> {
-        this.app.get<TBW>(this.tbwSymbol).boot();
+        await this.app.get<TBW>(this.tbwSymbol).boot();
         this.app.get<Pay>(this.paySymbol).boot();
         this.app.get<Server>(this.serverSymbol).boot();
     }

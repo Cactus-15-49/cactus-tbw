@@ -313,7 +313,7 @@ export class Database {
     }
 
     public getLastBlock(): number {
-        return this.db.prepare("SELECT MAX(height) AS height FROM blocks").get().height || 0;
+        return this.db.prepare("SELECT MAX(height) AS height FROM balances").get().height || 0;
     }
 
     public insertVote(

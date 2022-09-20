@@ -1,5 +1,5 @@
 import { Interfaces, Utils } from "@solar-network/crypto";
-import { Repositories } from "@solar-network/database";
+import { DatabaseService, Repositories } from "@solar-network/database";
 import { Container, Contracts, Enums, Providers } from "@solar-network/kernel";
 import delay from "delay";
 
@@ -20,9 +20,18 @@ export class TBW {
     @Container.inject(Container.Identifiers.EventDispatcherService)
     private readonly events!: Contracts.Kernel.EventDispatcher;
 
+    @Container.inject(Container.Identifiers.DatabaseBlockRepository)
+    private readonly blockRepository!: Repositories.BlockRepository;
+
     @Container.inject(Container.Identifiers.WalletRepository)
     @Container.tagged("state", "blockchain")
     private readonly walletRepository!: Contracts.State.WalletRepository;
+
+    @Container.inject(Container.Identifiers.StateStore)
+    private readonly stateStore!: Contracts.State.StateStore;
+
+    @Container.inject(Container.Identifiers.DatabaseService)
+    private readonly databaseService!: DatabaseService;
 
     @Container.inject(Container.Identifiers.DatabaseTransactionRepository)
     private readonly transactionRepository!: Repositories.TransactionRepository;
@@ -33,14 +42,15 @@ export class TBW {
     private db!: Database;
 
     public async boot(): Promise<void> {
+        this.db = new Database(this.configuration.get("dbPath") as string);
+        this.db.setup();
+        await this.checkDatabase();
         this.events.listen(Enums.StateEvent.BuilderFinished, {
             handle: () => this.initialise(),
         });
     }
 
     public async initialise(): Promise<void> {
-        this.db = new Database(this.configuration.get("dbPath") as string);
-        this.db.setup();
         let delegate = this.getDelegate();
         if (!delegate) {
             this.logger.error(`TBW error: no delegate configured`);
@@ -128,5 +138,20 @@ export class TBW {
     private async getLastBlockHeight(): Promise<number> {
         const block = this.app.get<Contracts.State.StateStore>(Container.Identifiers.StateStore).getLastBlock();
         return block.data.height;
+    }
+
+    private async checkDatabase() {
+        const lastCoreDatabaseBlock = (await this.blockRepository.findLatest())!.height;
+        const lastTbwDatabaseBlock = this.db.getLastBlock();
+
+        if (lastTbwDatabaseBlock > 0 && lastTbwDatabaseBlock < lastCoreDatabaseBlock) {
+            this.logger.warning(
+                `Tbw and core database not in sync, removing ${lastCoreDatabaseBlock - lastTbwDatabaseBlock} blocks.`,
+            );
+            await this.blockRepository.deleteTopBlocks(this.app, lastCoreDatabaseBlock - lastTbwDatabaseBlock);
+            const lastBlock = await this.databaseService.getLastBlock();
+            this.stateStore.setLastBlock(lastBlock);
+            this.stateStore.setLastStoredBlockHeight(lastBlock.data.height);
+        }
     }
 }
