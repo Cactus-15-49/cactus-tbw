@@ -41,14 +41,13 @@ export class Command extends Commands.Command {
             });
 
             if (confirm) {
-                const { confirmRestart } =
-                    isFirstPayment && (settings.fidelity || 0) < fidelity
-                        ? await this.components.prompt({
-                              type: "confirm",
-                              name: "confirmRestart",
-                              message: `WARNING: if you change fidelity before the first payout, you'll need to use set_start again in order for the calculation of the first blocks to be accurate. Do you confirm?`,
-                          })
-                        : { confirmRestart: true };
+                const { confirmRestart } = isFirstPayment
+                    ? await this.components.prompt({
+                          type: "confirm",
+                          name: "confirmRestart",
+                          message: `WARNING: if you change fidelity before the first payout, you'll need to use set_start again in order for the calculation of the first blocks to be accurate. Do you confirm?`,
+                      })
+                    : { confirmRestart: true };
 
                 if (confirmRestart) {
                     try {
