@@ -19,7 +19,7 @@ export class Controller {
     public async pay(request: Hapi.Request, h: Hapi.ResponseToolkit): Promise<Hapi.ResponseObject> {
         this.logger.info(`Paying out!`);
 
-        const logs = (request as any).payload.logs;
+        const logs = (request as any).payload?.logs;
 
         const pay: Pay = this.app.get(Symbol.for("TBW<Pay>"));
         try {
@@ -56,7 +56,7 @@ export class Controller {
     }
 
     public async unpaid(request: Hapi.Request, h: Hapi.ResponseToolkit): Promise<Hapi.ResponseObject> {
-        const logs = (request as any).payload.logs;
+        const logs = (request as any).payload?.logs;
 
         const pay: Pay = this.app.get(Symbol.for("TBW<Pay>"));
         try {
