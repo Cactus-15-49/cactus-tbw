@@ -17,20 +17,28 @@ const processRawBlocks = (
     max: number | null,
 ) => {
     const blocks: blocksStructType[] = [];
-    const rawBlocksStruct = rawBlocks.map((block) => {
+
+    const rawBlocksStruct = Object.values(
+        rawBalances.reduce((state, curr) => {
+            if (state[curr.height]) {
+                state[curr.height].balances.push({ address: curr.address, weight: curr.weight });
+                return state;
+            }
+            state[curr.height] = {
+                height: curr.height,
+                round: AppUtils.roundCalculator.calculateRound(curr.height).round,
+                fees: Utils.BigNumber.ZERO,
+                rewards: Utils.BigNumber.ZERO,
+                balances: [{ address: curr.address, weight: curr.weight }],
+            };
+            return state;
+        }, {} as { [key: number]: blocksStructType }),
+    ).map((b) => {
+        const block = rawBlocks.find((rb) => rb.height === b.height);
         return {
-            height: block.height,
-            round: AppUtils.roundCalculator.calculateRound(block.height).round,
-            fees: block.fees,
-            rewards: block.rewards,
-            balances: rawBalances
-                .filter((b) => b.height === block.height)
-                .map((b) => {
-                    return {
-                        weight: b.weight,
-                        address: b.address,
-                    };
-                }),
+            ...b,
+            fees: block ? block.fees : b.fees,
+            rewards: block ? block.rewards : b.rewards,
         };
     });
 
@@ -51,7 +59,6 @@ const getPaytable = (dbPath: string): paytableWorkerResult => {
     const { blacklist, mode, routes, whitelist, sharing, max: maxCap, min: minCap, fidelity, payFees } = settings;
 
     const paytable: paytable = {};
-    let maxHeight = 0;
     let totalToPay = Utils.BigNumber.ZERO;
 
     const lastPayHeight = db.getLastPayHeight();
@@ -82,8 +89,6 @@ const getPaytable = (dbPath: string): paytableWorkerResult => {
         log(`Reward: ${block.rewards.toString()}`);
         log(`Fees: ${block.fees.toString()}`);
         log(`Original: ${JSON.stringify(block.balances)}`);
-
-        maxHeight = block.height > maxHeight ? block.height : maxHeight;
 
         const fidelityObject: {
             fidelityBalances: Array<{ height: number; weight: Utils.BigNumber; address: string }>;
@@ -161,7 +166,7 @@ const getPaytable = (dbPath: string): paytableWorkerResult => {
         serialisedPaytable[address] = balance.toString();
     }
 
-    return { maxHeight, totalToPay: totalToPay.toString(), paytable: serialisedPaytable };
+    return { maxHeight: endPreviousRoundHeight, totalToPay: totalToPay.toString(), paytable: serialisedPaytable };
 };
 
 const log = (message: string) => {
