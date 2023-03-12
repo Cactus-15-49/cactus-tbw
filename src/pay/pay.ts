@@ -78,7 +78,18 @@ export class Pay {
         const transactions: Interfaces.ITransactionData[] = [];
 
         let nonce = wallet.getNonce().plus(1);
-        const balance = wallet.getBalance();
+        const notToIncludeForgedBlocks = this.db.getTbwBlocksBetweenHeights(
+            maxHeight + 1,
+            this.blockchain.getLastHeight() + 1,
+        );
+        const balance = wallet
+            .getBalance()
+            .minus(
+                notToIncludeForgedBlocks.reduce(
+                    (sum, curr) => sum.plus(curr.fees).plus(curr.rewards),
+                    Utils.BigNumber.ZERO,
+                ),
+            );
         const milestone = Managers.configManager.getMilestone();
         const transfersMax = milestone.transfer?.maximum || 64;
 
