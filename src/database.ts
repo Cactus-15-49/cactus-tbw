@@ -60,6 +60,7 @@ export class Database {
         `,
             )
             .run();
+        this.db.pragma("journal_mode = WAL");
     }
 
     // Whitelist
